@@ -5,7 +5,7 @@
 
 image {
   # resolution %WIDTH% %HEIGHT%
-  resolution 224 224
+  resolution 256 256
   aa 0 1
   filter mitchell
 }
