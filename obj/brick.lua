@@ -60,6 +60,9 @@ function Brick:__init(opt)
 
     -- default unit
     self.unit = 0.8
+
+    -- board limits
+    self.limit = { -16, 15 }
 end
 
 -- get brick dimensions
@@ -169,15 +172,16 @@ function Brick:pos2trans(x, y, z)
             (x ~= nil and y ~= nil and z ~= nil),
         'Wrong input pos')
 
-    if x ~= nil and y == nil and z == nil then
-        local trans = x:clone():float()
-        trans[{ { 1 } }]:mul(self.unit):add(self.unit / 2)
-        trans[{ { 2 } }]:mul(self:size(2))
-        trans[{ { 3 } }]:mul(self.unit):add(self.unit / 2)
-        return trans:mul(100):round():div(100)
-    else
-        return { x * self.unit + self.unit / 2, y * self:size(2), z * self.unit + self.unit / 2 }
+    if x ~= nil and y ~= nil and z ~= nil then
+        x = torch.LongTensor({ x, y, z })
     end
+
+    -- Clamp within limits
+    local trans = x:clone():float():clamp(self.limit[1], self.limit[2])
+    trans[{ { 1 } }]:mul(self.unit):add(self.unit / 2)
+    trans[{ { 2 } }]:mul(self:size(2))
+    trans[{ { 3 } }]:mul(self.unit):add(self.unit / 2)
+    return trans:mul(100):round():div(100)
 end
 
 

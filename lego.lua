@@ -23,6 +23,7 @@ function Lego:__init(opt)
         { 'rotation', type = 'int-nonneg', default = 0 },
         { 'path', type = 'string', default = paths.cwd() },
         { 'dim', type = 'int-pos', default = 256 },
+        { 'fov', type = 'int-pos', default = 22 },
     })
 
     -- initialise configuration file
@@ -53,7 +54,9 @@ end
 function Lego:init_resolution()
     local command = "sed -i.bak 's/  resolution.*/  resolution " ..
             self.opt.dim .. " " .. self.opt.dim ..
-            "/g' scene.sc && rm scene.sc.bak"
+            "/g' scene.sc && " ..
+            "sed -i.bak 's/  fov.*/  fov " .. self.opt.fov .. "/g' scene.sc && " ..
+            "rm scene.sc.bak"
     util.execute(command)
 end
 
@@ -166,9 +169,9 @@ local l = Lego({ wireframe = false })
 l:load_lxf()
 l:parse_lxfml()
 l:render()
---print(l.bricks[1]:get_pos())
-print(l.bricks[1]:move_pos(-1, 0, -10))
+print(l.bricks[1]:get_pos())
+print(l.bricks[1]:set_pos(15, 0, 15))
 --print(l.bricks[1]:get_pos())
 l:save_lxf('tmp.lxf')
---print(l.bricks[3]:totable())  
+--print(l.bricks[3]:totable())
 l:render('tmp.lxf', 'out/tmp.png')

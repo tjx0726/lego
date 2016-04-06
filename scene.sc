@@ -19,7 +19,8 @@ background {
 camera {
   type pinhole
   transform row %LDDCAMERA%
-  fov    30
+  # fov 30
+  fov 22
   aspect %ASPECTRATIO%
 }
 
@@ -30,7 +31,7 @@ camera {
 #  eye    20 15 25
 #  target 0 4 0
 #  up     0 1 0
-#  fov    60
+#  fov 22
 #  aspect 1.333333
 #}
 
