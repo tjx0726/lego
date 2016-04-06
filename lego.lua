@@ -1,8 +1,14 @@
-local class = require 'class'
+--require("luaXml")
 local xml = require 'xml'
+local class = require 'class'
+local lub = require 'lub'
 local image = require 'image'
+
+local util = require 'include/util'
 local log = require 'include/log'
 local kwargs = require 'include/kwargs'
+
+local Brick = require 'obj/brick'
 
 -- @TODO handle rotation
 
@@ -26,9 +32,13 @@ function Lego:__init(opt)
 
     -- current lxf
     self.lxfml = nil
+    self.lxfml_k = nil
 
     -- output image tensor
     self.image = torch.Tensor(3, self.opt.dim, self.opt.dim)
+
+    -- bricks table
+    self.bricks = {}
 end
 
 -- initialise config file for bluerender
@@ -73,7 +83,7 @@ function Lego:render()
     return self.image
 end
 
--- parse lxf file
+-- load lxf file data
 function Lego:load_lxf()
     -- unzip lxfml from lxf
     local command = 'unzip -p ' .. self.opt.input .. ' IMAGE100.LXFML'
@@ -83,15 +93,20 @@ function Lego:load_lxf()
 
     -- parse lxfml
     self.lxfml = xml.load(lxfml_data)
-    print(self.lxfml)
 end
 
 -- save lxf file
 function Lego:save_lxf()
     assert(self.lxfml, 'input LXF file not loaded')
 
+    -- update bricks
+    for i = 1, #self.bricks do
+        self.lxfml[self.lxfml_k['Bricks']][i] = self.bricks[i]:totable()
+    end
+
     -- dump xml
-    local xml_string = xml.dump(self.lxfml)
+    local xml_string = '<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n' ..
+            xml.dump(self.lxfml):gsub("'", "\"")
 
     -- write temp lxfml file
     local file = torch.DiskFile('IMAGE100.LXFML', 'w')
@@ -99,13 +114,45 @@ function Lego:save_lxf()
     file:close()
 
     -- zip lxfml file
-    local command = 'zip -r -0 ' .. self.opt.input .. ' IMAGE100.LXFML && rm IMAGE100.LXFML'
+    local command = 'zip -r -0 ' .. self.opt.input .. ' IMAGE100.LXFML' -- && rm IMAGE100.LXFML'
     local handle = io.popen(command)
+    print(handle:read("*a"))
     handle:close()
 end
 
 
-local l = Lego({})
+-- parse lxfml file
+function Lego:parse_lxfml()
+
+    -- parse keys
+    self.lxfml_k = {}
+    for k, v in pairs(self.lxfml) do
+        if self.lxfml[k].xml ~= nil then
+            self.lxfml_k[self.lxfml[k].xml] = k
+        end
+    end
+
+    -- cleanup unnecessary keys
+    self.lxfml[self.lxfml_k['RigidSystems']] = { xml = 'RigidSystems' }
+    self.lxfml[self.lxfml_k['GroupSystems']] = { xml = 'GroupSystems', [1] = { xml = 'GroupSystem' } }
+    self.lxfml[self.lxfml_k['BuildingInstructions']] = { xml = 'BuildingInstructions' }
+
+    -- parse bricks
+    self.bricks = {}
+    for k, v in pairs(self.lxfml[self.lxfml_k['Bricks']]) do
+        if self.lxfml[self.lxfml_k['Bricks']][k].xml ~= nil then
+            -- create new brick
+            local b = Brick({
+                xml = self.lxfml[self.lxfml_k['Bricks']][k]
+            })
+            table.insert(self.bricks, b)
+        end
+    end
+end
+
+
+local l = Lego()
 l:load_lxf()
---l:save_lxf()
---l:render()
+l:parse_lxfml()
+l:save_lxf()
+l:render()
