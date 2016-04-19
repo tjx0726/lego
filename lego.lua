@@ -17,20 +17,12 @@ local Lego = class('Lego')
 
 function Lego:__init(opt)
     self.opt = kwargs(opt, {
-        { 'input', type = 'string', default = 'input.lxf' },
+        { 'input', type = 'string', default = 'IMAGE100.LXFML' },
         { 'output', type = 'string', default = 'out/output.png' },
-        { 'wireframe', type = 'boolean', default = false },
         { 'rotation', type = 'int-nonneg', default = 0 },
         { 'path', type = 'string', default = paths.cwd() },
-        { 'dim', type = 'int-pos', default = 256 },
-        { 'fov', type = 'int-pos', default = 22 },
+        { 'dim', type = 'int-pos', default = 1024 },
     })
-
-    -- initialise configuration file
-    self:init_config()
-
-    -- initialise scene resolution
-    self:init_resolution()
 
     -- current lxf
     self.lxfml = nil
@@ -43,43 +35,19 @@ function Lego:__init(opt)
     self.bricks = {}
 end
 
--- initialise config file for bluerender
-function Lego:init_config()
-    local file = torch.DiskFile(os.getenv("HOME") .. '/.bluerender.ini', 'w')
-    file:writeString('db.location=' .. self.opt.path .. '/db/db.lif\n' .. 'last.db.version=1x1564.2\n')
-    file:close()
-end
-
--- initialise scene resolution
-function Lego:init_resolution()
-    local command = "sed -i.bak 's/  resolution.*/  resolution " ..
-            self.opt.dim .. " " .. self.opt.dim ..
-            "/g' scene.sc && " ..
-            "sed -i.bak 's/  fov.*/  fov " .. self.opt.fov .. "/g' scene.sc && " ..
-            "rm scene.sc.bak"
-    util.execute(command)
-end
-
 -- render input file
 function Lego:render(input, output)
-    log.infof('Render %s -> %s', self.opt.input, self.opt.output)
+    if input == nil then input = self.opt.input end
+    if output == nil then output = self.opt.output end
+
+    log.infof('Render %s -> %s', input, output)
 
     -- update bricks
     self:update_bricks()
 
-    -- set wireframe mode
-    local wireframe
-    if self.opt.wireframe then
-        wireframe = 'Y'
-    else
-        wireframe = 'N'
-    end
-
-    -- call bluerender
-    if input == nil then input = self.opt.input end
-    if output == nil then output = self.opt.output end
-    local command = 'java -cp "bluerender/bin/*" bluerender.CmdLineRenderer ' ..
-            wireframe .. ' ' .. self.opt.rotation .. ' ' ..
+    -- call blender
+    local command = 'blender scene.blend -b -f 1 -P render.py ' ..
+            self.opt.dim .. ' ' ..
             input .. ' ' .. output
     util.execute(command)
 
@@ -92,6 +60,22 @@ function Lego:render(input, output)
 end
 
 -- load lxf file data
+function Lego:load_lxfml(filename)
+
+    if not filename then
+        filename = self.opt.input
+    end
+
+    -- load file
+    local f = io.open(filename, "rb")
+    local lxfml_data = f:read("*all")
+    f:close()
+
+    -- parse lxfml
+    self.lxfml = xml.load(lxfml_data)
+end
+
+-- load lxfml file data
 function Lego:load_lxf()
     -- delete image
     local command = 'zip -d ' .. self.opt.input .. ' IMAGE100.PNG'
@@ -124,7 +108,10 @@ function Lego:save_lxf(filename)
             xml.dump(self.lxfml):gsub("'", "\"")
 
     -- write temp lxfml file
-    local file = torch.DiskFile('IMAGE100.LXFML', 'w')
+    if not filename then
+        filename = 'IMAGE100.LXF'
+    end
+    local file = torch.DiskFile(filename, 'w')
     file:writeString(xml_string)
     file:close()
 
@@ -132,6 +119,26 @@ function Lego:save_lxf(filename)
     if filename == nil then filename = self.opt.input end
     local command = 'zip -r -0 ' .. filename .. ' IMAGE100.LXFML' -- && rm IMAGE100.LXFML'
     util.execute(command)
+end
+
+-- save lxfml file
+function Lego:save_lxfml(filename)
+    assert(self.lxfml, 'input LXF file not loaded')
+
+    -- update bricks
+    self:update_bricks()
+
+    -- dump xml
+    local xml_string = '<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n' ..
+            xml.dump(self.lxfml):gsub("'", "\"")
+
+    -- write temp lxfml file
+    if not filename then
+        filename = self.opt.input
+    end
+    local file = torch.DiskFile(filename, 'w')
+    file:writeString(xml_string)
+    file:close()
 end
 
 
@@ -165,13 +172,13 @@ function Lego:parse_lxfml()
 end
 
 
-local l = Lego({ wireframe = false })
-l:load_lxf()
+local l = Lego()
+l:load_lxfml()
 l:parse_lxfml()
+l.bricks[1]:set_pos(0, 0, 0)
 l:render()
-print(l.bricks[1]:get_pos())
-print(l.bricks[1]:set_pos(15, 0, 15))
---print(l.bricks[1]:get_pos())
-l:save_lxf('tmp.lxf')
---print(l.bricks[3]:totable())
-l:render('tmp.lxf', 'out/tmp.png')
+-- print(l.bricks[1]:get_pos())
+l.bricks[1]:move_pos(-4, 0, 0)
+-- print(l.bricks[1]:get_pos())
+l:save_lxfml('tmp.lxfml')
+l:render('tmp.lxfml', 'out/tmp.png')

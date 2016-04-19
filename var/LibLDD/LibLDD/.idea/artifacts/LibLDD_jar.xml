@@ -1,0 +1,10 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="LibLDD:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/LibLDD_jar</output-path>
+    <root id="archive" name="LibLDD.jar">
+      <element id="module-output" name="LibLDD" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/jar/xom-1.2.10.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/jar/lwjgl_util.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>
