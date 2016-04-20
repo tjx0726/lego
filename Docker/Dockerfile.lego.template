@@ -1,0 +1,30 @@
+FROM johael/ubuntu-cuda-mkl-conda-torch
+MAINTAINER Yannis Assael
+
+# ubuntu packages {{
+    RUN add-apt-repository ppa:cheleb/blender-svn && \
+        apt-get update && apt-get install blender
+# }}
+
+# torch packages {{
+    # for reading gzip files without extracting them all at once... used by the word2vec loader in nnob
+    RUN luarocks install class &&
+        luarocks install xml &&
+        luarocks install lego
+    
+# }}
+
+# Section to get permissions right, and avoid running inside as root {{
+
+    # Create a user matching the UID, and create/chmod home dir (== project directory)
+    # (uid corresponds to breord in CS network)
+    RUN useradd -d /project -u <<UID>> --create-home user
+    USER user
+    WORKDIR /project
+    # TODO: Change this to files you need, excluding datasets etc. Or use dockerignore file.
+    # ADD . /project/
+
+    # TODO: Uncomment to set a default executable/args to run
+    # ENTRYPOINT ["/opt/torch/install/bin/th"]
+
+# }}

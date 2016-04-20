@@ -1,27 +1,31 @@
 import bpy
 import sys
+import mathutils
 import xml.etree.cElementTree as ET
 
 config = {}
+config['target_res'] = 1024
 config['res'] = 1024
 config['input'] = 'IMAGE100.LXFML'
 config['output'] = "out/output.png"
-if len(sys.argv) > 7:
-	config['res'] = int(sys.argv[7])
-if len(sys.argv) > 8:
-	config['input'] = sys.argv[8]
-if len(sys.argv) > 9:
-	config['output'] = sys.argv[9]
+
+# print(sys.argv)
+if len(sys.argv) > 12:
+	config['res'] = int(sys.argv[12])
+if len(sys.argv) > 13:
+	config['input'] = sys.argv[13]
+	config['output'] = sys.argv[14]
+
 
 # CUDA backend
-bpy.context.scene.cycles.device = 'GPU'
-bpy.context.user_preferences.system.compute_device_type = 'CUDA'
-bpy.context.user_preferences.system.compute_device = 'CUDA_0'
+# bpy.context.scene.cycles.device = 'GPU'
+# bpy.context.user_preferences.system.compute_device_type = 'CUDA'
+# bpy.context.user_preferences.system.compute_device = 'CUDA_0'
 
 # Resoltuion
 bpy.context.scene.render.resolution_x = config['res']
 bpy.context.scene.render.resolution_y = config['res']
-bpy.context.scene.render.resolution_percentage = 100
+bpy.context.scene.render.resolution_percentage = 100 # .*config['res']/config['target_res']
 bpy.context.scene.render.use_border = False
 
 # Create Materials
@@ -231,6 +235,7 @@ def makeMaterial(name, diffuse, specular, alpha):
 designIDs = []
 refIDs = []
 locations = []
+orientations = []
 matIds = []
 # designIDs = [3005, 3005, 3005]
 # locations = [(-0.8*16,0,0), (0,0.8*16,0), (0.8*16,0,0.96)]
@@ -255,6 +260,10 @@ for brick in root.iter('Brick'):
 	# Transformation
 	transformation = [float(x) for x in brick.find('Part').find('Bone').get('transformation').split(',')]
 	locations.append((transformation[-1], transformation[-3], transformation[-2]))
+
+	# Orientation must be a matrix
+	# orientation = mathutils.Matrix(((transformation[0], transformation[1], transformation[2]), (transformation[3], transformation[4], transformation[5]), (transformation[6], transformation[7], transformation[8])))
+	# orientations.append(orientation)
 
 # xz unit
 brick_w = 0.8

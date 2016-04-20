@@ -5,11 +5,11 @@ local xml = require 'xml'
 local class = require 'class'
 local image = require 'image'
 
-local util = require 'include/util'
-local log = require 'include/log'
-local kwargs = require 'include/kwargs'
+local util = require 'include.util'
+local log = require 'include.log'
+local kwargs = require 'include.kwargs'
 
-local Brick = require 'obj/brick'
+local Brick = require 'obj.brick'
 
 -- @TODO handle rotation
 
@@ -33,6 +33,10 @@ function Lego:__init(opt)
 
     -- bricks table
     self.bricks = {}
+
+    -- load file
+    self:load_lxfml()
+    self:parse_lxfml()
 end
 
 -- render input file
@@ -40,13 +44,13 @@ function Lego:render(input, output)
     if input == nil then input = self.opt.input end
     if output == nil then output = self.opt.output end
 
-    log.infof('Render %s -> %s', input, output)
+    log.debugf('[LEGO] Render %s -> %s', input, output)
 
     -- update bricks
     self:update_bricks()
 
     -- call blender
-    local command = 'blender scene.blend -b -f 1 -P render.py ' ..
+    local command = 'blender -b scene.blend -noaudio -f 1 -t 8 -P render.py ' ..
             self.opt.dim .. ' ' ..
             input .. ' ' .. output
     util.execute(command)
@@ -54,7 +58,7 @@ function Lego:render(input, output)
     -- read image
     self.image:set(image.load(output))
 
-    log.info('Render completed')
+    log.debug('[LEGO] Render completed')
 
     return self.image
 end
@@ -66,6 +70,8 @@ function Lego:load_lxfml(filename)
         filename = self.opt.input
     end
 
+    log.debugf('[LEGO] Load LXFML %s', filename)
+
     -- load file
     local f = io.open(filename, "rb")
     local lxfml_data = f:read("*all")
@@ -76,13 +82,20 @@ function Lego:load_lxfml(filename)
 end
 
 -- load lxfml file data
-function Lego:load_lxf()
+function Lego:load_lxf(filename)
+
+    if not filename then
+        filename = self.opt.input
+    end
+    
+    log.debugf('[LEGO] Load LXF %s', filename)
+
     -- delete image
-    local command = 'zip -d ' .. self.opt.input .. ' IMAGE100.PNG'
+    local command = 'zip -d ' .. filename .. ' IMAGE100.PNG'
     util.execute(command)
 
     -- delete image and unzip lxfml from lxf
-    local command = 'unzip -p ' .. self.opt.input .. ' IMAGE100.LXFML'
+    local command = 'unzip -p ' .. filename .. ' IMAGE100.LXFML'
     local lxfml_data = util.execute(command)
 
     -- parse lxfml
@@ -111,6 +124,9 @@ function Lego:save_lxf(filename)
     if not filename then
         filename = 'IMAGE100.LXF'
     end
+
+    log.debugf('[LEGO] Saving LXF %s', filename)
+
     local file = torch.DiskFile(filename, 'w')
     file:writeString(xml_string)
     file:close()
@@ -136,6 +152,9 @@ function Lego:save_lxfml(filename)
     if not filename then
         filename = self.opt.input
     end
+
+    log.debugf('[LEGO] Saving LXFML %s', filename)
+
     local file = torch.DiskFile(filename, 'w')
     file:writeString(xml_string)
     file:close()
@@ -172,13 +191,23 @@ function Lego:parse_lxfml()
 end
 
 
-local l = Lego()
-l:load_lxfml()
-l:parse_lxfml()
-l.bricks[1]:set_pos(0, 0, 0)
-l:render()
--- print(l.bricks[1]:get_pos())
-l.bricks[1]:move_pos(-4, 0, 0)
--- print(l.bricks[1]:get_pos())
-l:save_lxfml('tmp.lxfml')
-l:render('tmp.lxfml', 'out/tmp.png')
+-- local l = Lego()
+-- l:load_lxfml()
+-- l:parse_lxfml()
+-- l.bricks[1]:set_pos(0, 0, 0)
+-- l:render()
+-- -- print(l.bricks[1]:get_pos())
+-- l.bricks[1]:move_pos(-4, 0, 0)
+-- l.bricks[2]:move_pos(1, 0, 0)
+-- l.bricks[3]:move_pos(1, 0, 2)
+-- l:save_lxfml('tmp.lxfml')
+-- l:render('tmp.lxfml', 'out/tmp.png')
+
+-- l.bricks[1]:move_pos(-4, 0, 0)
+-- l.bricks[2]:move_pos(1, 0, 0)
+-- l.bricks[3]:move_pos(1, 0, 2)
+-- l.bricks[4]:move_pos(1, 0, 2)
+-- l:save_lxfml('tmp2.lxfml')
+-- l:render('tmp2.lxfml', 'out/tmp2.png')
+
+return Lego
