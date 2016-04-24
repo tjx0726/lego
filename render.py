@@ -4,23 +4,25 @@ import mathutils
 import xml.etree.cElementTree as ET
 
 config = {}
-config['target_res'] = 1024
-config['res'] = 1024
+config['target_res'] = 128
+config['res'] = 128
 config['input'] = 'IMAGE100.LXFML'
 config['output'] = "out/output.png"
 
-# print(sys.argv)
-if len(sys.argv) > 12:
-	config['res'] = int(sys.argv[12])
-if len(sys.argv) > 13:
-	config['input'] = sys.argv[13]
-	config['output'] = sys.argv[14]
-
+argv = sys.argv[sys.argv.index("--") + 1:] 
+print(argv)
+if len(argv) > 1:
+	config['res'] = int(argv[0])
+if len(argv) > 2:
+	config['input'] = argv[1]
+	config['output'] = argv[2]
+# print(config)
 
 # CUDA backend
-# bpy.context.scene.cycles.device = 'GPU'
-# bpy.context.user_preferences.system.compute_device_type = 'CUDA'
-# bpy.context.user_preferences.system.compute_device = 'CUDA_0'
+bpy.context.scene.cycles.device = 'GPU'
+bpy.ops.render.render(True)
+bpy.context.user_preferences.system.compute_device_type = 'CUDA'
+bpy.context.user_preferences.system.compute_device = 'CUDA_0'
 
 # Resoltuion
 bpy.context.scene.render.resolution_x = config['res']

@@ -35,7 +35,7 @@ cmd:option('-nsteps', 100, 'number of steps')
 cmd:option('-target_step', 100, 'target network updates')
 
 cmd:option('-step', 1, 'print every episodes')
-cmd:option('-step_test', 10, 'print every episodes')
+cmd:option('-step_test', 1, 'test every episodes')
 
 cmd:option('-plot', false, 'plot q values')
 
@@ -69,22 +69,23 @@ end
 
 -- Move
 function lego.action(cur, a)
-    local brickId = math.floor((a - 1) / (3*4) + 1) -- which of the 12
-    local brickXYZ = math.floor(((a - 1) % (3*4)) / 4 + 1) -- which axis 3
-    local brickAction = ((a - 1) % (3*4)) % 4 + 1 -- which action 4
+    local axis = 2
+    local actions = 2
+    -- local brickId = math.floor((a - 1) / (3*4) + 1) -- which of the 12
+    -- local brickXYZ = math.floor(((a - 1) % (3*4)) / 4 + 1) -- which axis 3
+    -- local brickAction = ((a - 1) % (3*4)) % 4 + 1 -- which action 4
+    local brickId = math.floor((a - 1) / (axis*actions) + 1) -- which of the 12
+    local brickXYZ = math.floor(((a - 1) % (axis*actions)) / actions + 1) -- which axis 3
+    local brickAction = ((a - 1) % (axis*actions)) % actions + 1 -- which action 4
     -- print('brickId', brickId)
     -- print('brickXYZ', brickXYZ)
     -- print('brickAction', brickAction)
 
     local a_t = 0
     if brickAction == 1 then
-        a_t = -2
-    elseif brickAction == 2 then
         a_t = -1
-    elseif brickAction == 3 then
+    elseif brickAction == 2 then
         a_t = 1
-    else
-        a_t = 2
     end
 
     local x = 0
@@ -93,23 +94,45 @@ function lego.action(cur, a)
     if brickXYZ == 1 then
         x = a_t
     elseif brickXYZ == 2 then
-        y = a_t
-    elseif brickXYZ == 3 then
         z = a_t
+    elseif brickXYZ == 3 then
+        print('crap')
     end
 
     cur.bricks[brickId]:move_pos(x, y, z)
 end
 
+
 -- Target design
-lego.target = require('lego')({input='IMAGE100.LXFML', output="out/target.png", dim=opt.dim})
+lego.target = require('lego')({input='IMAGE100.LXFML', output="out/target.png", dim=opt.dim, socket=false})
 lego.target.bricks[1]:set_pos(5, 0, 0)
 lego.target.bricks[2]:set_pos(-5, 0, 0)
 lego.target.bricks[3]:set_pos(0, 0, 5)
-lego.target.bricks[4]:set_pos(0, 0, -5)
+-- lego.target.bricks[4]:set_pos(0, 0, -5)
 lego.target:save_lxfml('target.lxfml')
 lego.target:render('target.lxfml')
 lego.target.image_batch = lego.target.image:view(1, 3, opt.dim, opt.dim):expand(opt.bs, 3, opt.dim, opt.dim)
+
+-- print(lego.target.bricks[1]:get_pos())
+-- lego.action(lego.target, 1)
+-- lego.action(lego.target, 2)
+-- lego.action(lego.target, 3)
+-- lego.action(lego.target, 4)
+-- lego.action(lego.target, 5)
+-- lego.action(lego.target, 6)
+-- lego.action(lego.target, 7)
+-- lego.action(lego.target, 8)
+-- lego.action(lego.target, 9)
+-- lego.action(lego.target, 10)
+-- lego.action(lego.target, 11)
+-- lego.action(lego.target, 12)
+-- print(lego.target.bricks[1]:get_pos())
+-- print(lego.target.bricks[2]:get_pos())
+
+-- Init design
+lego.cur = require('lego')({input='IMAGE100.LXFML', output="out/train_0.png", dim=opt.dim})
+lego.cur:save_lxfml('tmp.lxfml')
+lego_cur_image_init = lego.cur:render('tmp.lxfml', 'out/train_0.png'):clone()
 
 -- Set float as default type
 torch.manualSeed(opt.seed)
@@ -120,6 +143,7 @@ torch.setdefaulttensortype('torch.FloatTensor')
 if opt.cuda then
     require 'cutorch'
     require 'cunn'
+    require 'cudnn'
     cutorch.setDevice(1)
 	opt.dtype = 'torch.CudaTensor'
     print(cutorch.getDeviceProperties(1))
@@ -128,11 +152,10 @@ else
 end
 
 -- Initialise game
-local a_space = #lego.target.bricks*3*4
--- local env = require 'rlenvs.GridWorld'()
--- local a_space = env:getActionSpec()[3]
--- local r_space = { env:getRewardSpec() }
--- local s_space = env:getStateSpec()
+local axis = 2
+local actions = 2
+local bricks = 3 -- #lego.target.bricks
+local a_space = axis * actions * bricks
 
 -- Initialise model
 local exp = (require 'model') {
@@ -141,7 +164,13 @@ local exp = (require 'model') {
     dtype = opt.dtype
 }
 
-local model = exp.model
+local model
+if opt.cuda then
+	model = cudnn.convert(exp.model, cudnn)
+else
+	model = exp.model
+end
+
 local model_target = exp.model:clone()
 local params, gradParams = model:getParameters()
 local params_target, _ = model_target:getParameters()
@@ -192,9 +221,9 @@ local beginning_time = torch.tic()
 for e = 1, opt.nepisodes do
 
     -- Initial state
-    lego.cur = require('lego')({input='IMAGE100.LXFML', output="out/train_0.png", dim=opt.dim})
+ 	lego.cur:load_lxfml('IMAGE100.LXFML')
  	lego.cur:save_lxfml('tmp.lxfml')
-    episode.s_t = lego.cur:render('tmp.lxfml', 'out/train_0.png'):clone()
+    episode.s_t = lego_cur_image_init
     episode.terminal = 0
 
     -- Initialise clock
@@ -218,7 +247,7 @@ for e = 1, opt.nepisodes do
         --compute reward for current state-action pair
         lego.action(lego.cur, episode.a_t)
 	 	lego.cur:save_lxfml('tmp.lxfml')
-	    episode.s_t1 = lego.cur:render('tmp.lxfml', 'out/train_' .. step .. '.png'):clone()
+	    episode.s_t1 = lego.cur:render('tmp.lxfml', 'out/train_' .. step .. '.png')
         episode.r_t, episode.terminal = lego.reward(lego.cur, lego.target)
 
         -- If terminal reward=1
@@ -234,8 +263,8 @@ for e = 1, opt.nepisodes do
         replay[r_id] = {
             r_t = episode.r_t,
             a_t = episode.a_t,
-            s_t = episode.s_t,
-            s_t1 = episode.s_t1,
+            s_t = episode.s_t:clone(),
+            s_t1 = episode.s_t1:clone(),
             terminal = episode.terminal and 1 or 0
         }
 

@@ -11,6 +11,8 @@ local kwargs = require 'include.kwargs'
 
 local Brick = require 'obj.brick'
 
+local socket = require("socket")
+
 -- @TODO handle rotation
 
 local Lego = class('Lego')
@@ -22,6 +24,7 @@ function Lego:__init(opt)
         { 'rotation', type = 'int-nonneg', default = 0 },
         { 'path', type = 'string', default = paths.cwd() },
         { 'dim', type = 'int-pos', default = 1024 },
+        { 'socket', type = 'boolean', default = true },
     })
 
     -- current lxf
@@ -37,6 +40,32 @@ function Lego:__init(opt)
     -- load file
     self:load_lxfml()
     self:parse_lxfml()
+
+    -- socket
+    if self.opt.socket then
+        log.debugf('[LEGO] Starting blender socket')
+
+        os.execute('killall blender 2>/dev/null')
+        
+        local command = 'blender -b scene.blend -noaudio -f 1 -t 4 -P render.py -- 1 ' .. self.opt.dim .. ' 2>&1 1>/dev/null &'
+        -- print(command)
+        os.execute(command)
+        
+        os.execute("sleep 3")
+
+        local host = "127.0.0.1"
+        local port = 5346
+        log.debugf('[LEGO] Connecting blender socket')
+        self.s = assert(socket.tcp())
+        assert(self.s:connect(host, port))
+        -- self.s:settimeout(0)
+    end
+end
+
+function Lego:close()
+    log.debugf('[LEGO] Closing Blender')
+    assert(self.s:send('exit'))
+    self.s:close()
 end
 
 -- render input file
@@ -50,10 +79,22 @@ function Lego:render(input, output)
     self:update_bricks()
 
     -- call blender
-    local command = 'blender -b scene.blend -noaudio -f 1 -t 8 -P render.py ' ..
-            self.opt.dim .. ' ' ..
-            input .. ' ' .. output
-    util.execute(command)
+    if not self.opt.socket then
+        local command = 'blender -b scene.blend -noaudio -f 1 -t 4 -P render.py -- 0 ' ..
+                self.opt.dim .. ' ' ..
+                input .. ' ' .. output
+        -- print(command)
+        util.execute(command)
+    else
+        log.debugf('[LEGO] Sending to blender socket')
+        assert(self.s:send(input .. ',' .. output))
+        log.debugf('[LEGO] Receiving to blender socket')
+        local data, emsg, partial = self.s:receive('*l')
+        log.debugf('[LEGO] Received ' .. data)
+
+        -- log.debugf('[LEGO] Closing blender socket')
+        -- self.s:close()
+    end
 
     -- read image
     self.image:set(image.load(output))
@@ -79,6 +120,7 @@ function Lego:load_lxfml(filename)
 
     -- parse lxfml
     self.lxfml = xml.load(lxfml_data)
+    self:parse_lxfml()
 end
 
 -- load lxfml file data
@@ -100,6 +142,7 @@ function Lego:load_lxf(filename)
 
     -- parse lxfml
     self.lxfml = xml.load(lxfml_data)
+    self:parse_lxfml()
 end
 
 -- update bricks
@@ -139,7 +182,7 @@ end
 
 -- save lxfml file
 function Lego:save_lxfml(filename)
-    assert(self.lxfml, 'input LXF file not loaded')
+    assert(self.lxfml, 'input LXFML file not loaded')
 
     -- update bricks
     self:update_bricks()
