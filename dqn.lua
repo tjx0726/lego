@@ -17,7 +17,7 @@ cmd:option('-seed', 1, 'initial random seed')
 cmd:option('-threads', 4, 'number of threads')
 
 -- gpu
-cmd:option('-cuda', true, 'cuda')
+cmd:option('-cuda', false, 'cuda')
 
 -- model
 cmd:option('-gamma', 0.99, 'discount factor')

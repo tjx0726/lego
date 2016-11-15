@@ -4,25 +4,28 @@ import mathutils
 import xml.etree.cElementTree as ET
 
 config = {}
+config['sockets'] = False
 config['target_res'] = 128
 config['res'] = 128
 config['input'] = 'IMAGE100.LXFML'
 config['output'] = "out/output.png"
 
 argv = sys.argv[sys.argv.index("--") + 1:] 
-print(argv)
+# print(argv)
 if len(argv) > 1:
-	config['res'] = int(argv[0])
+	config['sockets'] = int(argv[0]) == 1
 if len(argv) > 2:
-	config['input'] = argv[1]
-	config['output'] = argv[2]
+	config['res'] = int(argv[1])
+if len(argv) > 3:
+	config['input'] = argv[2]
+	config['output'] = argv[3]
 # print(config)
 
 # CUDA backend
-bpy.context.scene.cycles.device = 'GPU'
-bpy.ops.render.render(True)
-bpy.context.user_preferences.system.compute_device_type = 'CUDA'
-bpy.context.user_preferences.system.compute_device = 'CUDA_0'
+# bpy.context.scene.cycles.device = 'GPU'
+# bpy.ops.render.render(True)
+# bpy.context.user_preferences.system.compute_device_type = 'CUDA'
+# bpy.context.user_preferences.system.compute_device = 'CUDA_0'
 
 # Resoltuion
 bpy.context.scene.render.resolution_x = config['res']
@@ -233,68 +236,189 @@ def makeMaterial(name, diffuse, specular, alpha):
 # bpy.context.scene.camera.location.y = 15
 # bpy.context.scene.camera.location.z = 25
 
-# Read file
-designIDs = []
-refIDs = []
-locations = []
-orientations = []
-matIds = []
 # designIDs = [3005, 3005, 3005]
 # locations = [(-0.8*16,0,0), (0,0.8*16,0), (0.8*16,0,0.96)]
 # matIds = [23, 24, 25]
 
-# Load LXFML
-tree = ET.parse(config['input'])
-root = tree.getroot()
+if config['sockets']:
+	import socket
 
-for brick in root.iter('Brick'):
-	designIDs.append(int(brick.get('designID')))
+	s = socket.socket()
+	host = "127.0.0.1" #socket.gethostname()
+	port = 5346
+	# s.setblocking(0)
+	s.bind((host, port))
+	s.listen(1)
 
-	refIDs.append(int(brick.get('refID')))
+	c, addr = s.accept()
+	while True:
+		# print("Connection accepted from " + repr(addr[1]))
 
-	matId = int(brick.find('Part').get('materials').replace(',0',''))
-	matIds.append(matId)
+		# Receive 1024 bytes
+		print('[blender] Sockets receive')
+		buf = c.recv(1024).decode().strip()
+		print('[blender] Sockets received: ' + buf)
 
-	# Load material
-	if str(matId) not in bpy.data.materials:
-		makeMaterial(matId, bpy_materials[matId][0], bpy_materials[matId][1], bpy_materials[matId][2])
+		if buf != 'exit' and len(buf) > 0:
+			msg = buf.split(',')
+			config['input'] = msg[0]
+			config['output'] = msg[1]
 
-	# Transformation
-	transformation = [float(x) for x in brick.find('Part').find('Bone').get('transformation').split(',')]
-	locations.append((transformation[-1], transformation[-3], transformation[-2]))
+			# print(str(buf).split(',')) 
+			# print('[blender] Sockets ' + repr(addr[1]) + ": " + str(buf))
 
-	# Orientation must be a matrix
-	# orientation = mathutils.Matrix(((transformation[0], transformation[1], transformation[2]), (transformation[3], transformation[4], transformation[5]), (transformation[6], transformation[7], transformation[8])))
-	# orientations.append(orientation)
+			# Read file
+			designIDs = []
+			refIDs = []
+			locations = []
+			orientations = []
+			matIds = []
 
-# xz unit
-brick_w = 0.8
-brick_h = 0.96
+			# Load LXFML
+			tree = ET.parse(config['input'])
+			root = tree.getroot()
 
-# Iterate bricks
-for i in range(len(designIDs)):
+			for brick in root.iter('Brick'):
+				designIDs.append(int(brick.get('designID')))
 
-	# Load brick
-	designID = designIDs[i]
-	location = locations[i]
-	matId = matIds[i]
+				refIDs.append(int(brick.get('refID')))
 
-	# Load brick
-	brick = "bricks/" + str(designID) + ".obj"
-	bpy.ops.import_scene.obj(filepath=brick)
+				matId = int(brick.find('Part').get('materials').replace(',0',''))
+				matIds.append(matId)
 
-	# Set material
-	obj = bpy.context.selected_objects[0]
-	mat = bpy.data.materials[str(matId)]
-	obj.data.materials.append(mat)
+				# Load material
+				if str(matId) not in bpy.data.materials:
+					makeMaterial(matId, bpy_materials[matId][0], bpy_materials[matId][1], bpy_materials[matId][2])
 
-	# Dimensions
-	# x, y, z = obj.dimensions 
+				# Transformation
+				transformation = [float(x) for x in brick.find('Part').find('Bone').get('transformation').split(',')]
+				locations.append((transformation[-1], transformation[-3], transformation[-2]))
 
-	# Set location
-	obj.location = location
+				# Orientation must be a matrix
+				# orientation = mathutils.Matrix(((transformation[0], transformation[1], transformation[2]), (transformation[3], transformation[4], transformation[5]), (transformation[6], transformation[7], transformation[8])))
+				# orientations.append(orientation)
 
-# Render
-bpy.ops.render.render(write_still=True)
-# bpy.ops.render.opengl(write_still=True)
-bpy.data.images["Render Result"].save_render(filepath=config['output'])
+			# xz unit
+			brick_w = 0.8
+			brick_h = 0.96
+
+			# Iterate bricks
+			for i in range(len(designIDs)):
+
+				# Load brick
+				designID = designIDs[i]
+				location = locations[i]
+				matId = matIds[i]
+
+				# Load brick
+				brick = "bricks/" + str(designID) + ".obj"
+				bpy.ops.import_scene.obj(filepath=brick)
+
+				# Set material
+				obj = bpy.context.selected_objects[0]
+				mat = bpy.data.materials[str(matId)]
+				obj.data.materials.append(mat)
+
+				# Dimensions
+				# x, y, z = obj.dimensions 
+
+				# Set location
+				obj.location = location
+
+			# Render
+			print('[blender] Rendering')
+			bpy.ops.render.render(animation=False, write_still=True)
+			bpy.data.images["Render Result"].save_render(filepath=config['output'])
+
+
+			# Stop edit mode
+			# if bpy.ops.object.mode_set.poll():
+			# 	bpy.ops.object.mode_set(mode='OBJECT')
+
+			# Delete all mesh objects from a scene
+			print('[blender] Cleaning scene')
+			bpy.ops.object.select_by_type(type='MESH')
+			bpy.ops.object.delete()
+
+			# Delete meshes
+			# for ob in bpy.context.scene.objects:
+			#     ob.select = ob.type == 'MESH'
+			# bpy.ops.object.delete()
+
+
+			# Received tag
+			sent = c.send("OK\n".encode())
+			if sent == 0:
+				raise RuntimeError("socket connection broken")
+			print('[blender] OK Sent')
+			# c.close()
+			# elif buf == 'exit':
+		else:
+			c.close()
+			break
+
+
+else:
+
+	# Read file
+	designIDs = []
+	refIDs = []
+	locations = []
+	orientations = []
+	matIds = []
+
+	# Load LXFML
+	tree = ET.parse(config['input'])
+	root = tree.getroot()
+
+	for brick in root.iter('Brick'):
+		designIDs.append(int(brick.get('designID')))
+
+		refIDs.append(int(brick.get('refID')))
+
+		matId = int(brick.find('Part').get('materials').replace(',0',''))
+		matIds.append(matId)
+
+		# Load material
+		if str(matId) not in bpy.data.materials:
+			makeMaterial(matId, bpy_materials[matId][0], bpy_materials[matId][1], bpy_materials[matId][2])
+
+		# Transformation
+		transformation = [float(x) for x in brick.find('Part').find('Bone').get('transformation').split(',')]
+		locations.append((transformation[-1], transformation[-3], transformation[-2]))
+
+		# Orientation must be a matrix
+		# orientation = mathutils.Matrix(((transformation[0], transformation[1], transformation[2]), (transformation[3], transformation[4], transformation[5]), (transformation[6], transformation[7], transformation[8])))
+		# orientations.append(orientation)
+
+	# xz unit
+	brick_w = 0.8
+	brick_h = 0.96
+
+	# Iterate bricks
+	for i in range(len(designIDs)):
+
+		# Load brick
+		designID = designIDs[i]
+		location = locations[i]
+		matId = matIds[i]
+
+		# Load brick
+		brick = "bricks/" + str(designID) + ".obj"
+		bpy.ops.import_scene.obj(filepath=brick)
+
+		# Set material
+		obj = bpy.context.selected_objects[0]
+		mat = bpy.data.materials[str(matId)]
+		obj.data.materials.append(mat)
+
+		# Dimensions
+		# x, y, z = obj.dimensions 
+
+		# Set location
+		obj.location = location
+
+	# Render
+	bpy.ops.render.render(animation=False, write_still=True)
+	# bpy.ops.render.opengl(write_still=True)
+	bpy.data.images["Render Result"].save_render(filepath=config['output'])
